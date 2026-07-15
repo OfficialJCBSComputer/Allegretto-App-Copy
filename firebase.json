@@ -1,0 +1,63 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "allegretto-dff3d",
+          "appId": "1:175303218730:android:f54e18786847f786dd5553",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "allegretto-dff3d",
+          "configurations": {
+            "android": "1:175303218730:android:f54e18786847f786dd5553",
+            "ios": "1:175303218730:ios:850fe3a934df2debdd5553",
+            "macos": "1:175303218730:ios:850fe3a934df2debdd5553",
+            "web": "1:175303218730:web:807142bd6b885340dd5553",
+            "windows": "1:175303218730:web:db5d7e66faefe200dd5553"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

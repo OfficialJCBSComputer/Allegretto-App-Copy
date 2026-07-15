@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "175303218730",
+    "firebase_url": "https://allegretto-dff3d-default-rtdb.firebaseio.com",
+    "project_id": "allegretto-dff3d",
+    "storage_bucket": "allegretto-dff3d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:175303218730:android:b5d88b85f1d23c0bdd5553",
+        "android_client_info": {
+          "package_name": "za.co.allegretto.eisteddfod"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "175303218730-p4nrct13eopom9suf90decuok796mlvi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "za.co.allegretto.eisteddfod",
+            "certificate_hash": "cf41f2a0a1d9aca0c4c88185f05eab8cabf67d2e"
+          }
+        },
+        {
+          "client_id": "175303218730-lu3b26kt2k647hp0qu1c3ukjvanld9h2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKVMYc0o83k0qu5hMMuFk0f0qPrgraBzk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "175303218730-3ra4kmu538n0gb3248c9d0m4sdsi2dfa.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "175303218730-prscmhm65i2vs53kbev6t768llprqdus.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.allegrettoApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
