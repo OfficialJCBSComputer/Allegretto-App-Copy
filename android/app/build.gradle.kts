@@ -75,6 +75,13 @@ dependencies {
     
     // Add the dependency for the Firebase SDK for Google Analytics
     implementation("com.google.firebase:firebase-analytics")
+
+    // Force CameraX 1.6.1+ for 16 KB page size support
+    implementation("androidx.camera:camera-core:1.6.1")
+    implementation("androidx.camera:camera-camera2:1.6.1")
+    implementation("androidx.camera:camera-lifecycle:1.6.1")
+    // Force ML Kit barcode-scanning 17.3.0 for 16 KB page size support
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }
 
 flutter {

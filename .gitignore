@@ -41,7 +41,6 @@ app.*.map.json
 
 # Dependencies and temporary files
 node_modules/
-.firebase/
 .dart_tool/
 .packages
 
