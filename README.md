@@ -60,6 +60,33 @@ scripts\encrypt.ps1
 
 Commit the updated `.env.enc`.
 
+## Codemagic CI/CD (cloud builds)
+
+This repo includes `codemagic.yaml` for automatic builds on push.
+
+### Setup
+
+1. Go to [codemagic.io](https://codemagic.io) and sign in with GitHub
+2. Add this repository
+3. In **Environment variables**, add:
+
+| Variable | Value |
+|----------|-------|
+| `ENCRYPTION_PASSWORD` | The `.env.enc` password (`Allegretto2024`) — mark as **encrypted** |
+| `EMAIL` | Your email for build notifications |
+
+4. Push to `main` — Codemagic will build APK + IPA automatically
+
+### iOS signing
+
+To produce installable IPAs (not just unsigned), you'll need:
+
+1. An **Apple Developer account** ($99/year)
+2. Upload your **App Store Connect API key** or **certificates** in Codemagic > Teams > Apple Developer Portal
+3. Update `codemagic.yaml` to add codesigning (remove `--no-codesign` and add the signing config)
+
+Without codesigning, the built `.app` can only run in the iOS simulator.
+
 ## Firebase config files
 
 The following files are checked into the repo and required at build time:

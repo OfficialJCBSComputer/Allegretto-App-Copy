@@ -1,0 +1,50 @@
+workflows:
+  allegretto:
+    name: Allegretto Build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    triggers:
+      push:
+        branches:
+          - main
+      pull_request:
+        branches:
+          - main
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+      groups:
+        - allegretto_secrets
+
+    scripts:
+      # Decrypt .env.enc -> .env using the password stored in Codemagic env vars
+      - name: Decrypt secrets
+        script: |
+          if [ -f ".env.enc" ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 \
+              -d -in .env.enc -out .env -pass "pass:$ENCRYPTION_PASSWORD"
+          fi
+
+      - name: Get Flutter dependencies
+        script: flutter pub get
+
+      - name: Build Android APK
+        script: flutter build apk --debug
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ios --debug --no-codesign
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/ios/ipa/*.ipa
+      - build/ios/Debug-iphoneos/*.app
+
+    publishing:
+      email:
+        recipients:
+          - $EMAIL
