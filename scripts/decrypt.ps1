@@ -16,7 +16,19 @@ if (-not $Password) {
 }
 
 $encBytes = [System.IO.File]::ReadAllBytes($InputFile)
-$salt = $encBytes[0..15]
+$magic = [System.Text.Encoding]::ASCII.GetBytes("Salted__")
+if ($encBytes.Length -lt 16) {
+  Write-Error "Not a valid encrypted file"
+  exit 1
+}
+for ($i = 0; $i -lt 8; $i++) {
+  if ($encBytes[$i] -ne $magic[$i]) {
+    Write-Error "Not a valid encrypted file (missing Salted__ header)"
+    exit 1
+  }
+}
+
+$salt = $encBytes[8..15]
 $cipherBytes = $encBytes[16..($encBytes.Length - 1)]
 
 $deriveBytes = [System.Security.Cryptography.Rfc2898DeriveBytes]::new($Password, $salt, 600000, [System.Security.Cryptography.HashAlgorithmName]::SHA256)

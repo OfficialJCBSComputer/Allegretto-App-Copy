@@ -11,7 +11,7 @@ if (-not $Password) {
 }
 
 $plainBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $InputFile))
-$salt = [byte[]]::new(16)
+$salt = [byte[]]::new(8)
 [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($salt)
 
 $deriveBytes = [System.Security.Cryptography.Rfc2898DeriveBytes]::new($Password, $salt, 600000, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
@@ -26,8 +26,10 @@ $cipherBytes = $encryptor.TransformFinalBlock($plainBytes, 0, $plainBytes.Length
 $encryptor.Dispose()
 $aes.Dispose()
 
-$output = [byte[]]::new(16 + $cipherBytes.Length)
-[Buffer]::BlockCopy($salt, 0, $output, 0, 16)
+$magic = [System.Text.Encoding]::ASCII.GetBytes("Salted__")
+$output = [byte[]]::new(8 + 8 + $cipherBytes.Length)
+[Buffer]::BlockCopy($magic, 0, $output, 0, 8)
+[Buffer]::BlockCopy($salt, 0, $output, 8, 8)
 [Buffer]::BlockCopy($cipherBytes, 0, $output, 16, $cipherBytes.Length)
 
 [System.IO.File]::WriteAllBytes($OutputFile, $output)
