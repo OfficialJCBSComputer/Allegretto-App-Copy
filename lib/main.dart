@@ -476,19 +476,41 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   bool _isLoading = false;
   late AnimationController _logoAnim;
 
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasLowercase = false;
+  bool _hasNumber = false;
+  bool _hasSpecialChar = false;
+
+  void _checkPassword() {
+    final value = _passwordController.text;
+    setState(() {
+      _hasMinLength = value.length >= 8;
+      _hasUppercase = RegExp(r'[A-Z]').hasMatch(value);
+      _hasLowercase = RegExp(r'[a-z]').hasMatch(value);
+      _hasNumber = RegExp(r'[0-9]').hasMatch(value);
+      _hasSpecialChar = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _logoAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500))..repeat(reverse: true);
+    _passwordController.addListener(_checkPassword);
   }
   
   @override
-  void dispose() { _logoAnim.dispose(); super.dispose(); }
+  void dispose() { _passwordController.removeListener(_checkPassword); _logoAnim.dispose(); super.dispose(); }
 
   Future<void> _submit() async {
     final e = _emailController.text.trim();
     final p = _passwordController.text.trim();
     if (e.isEmpty || p.isEmpty) return;
+    if (!_isLogin && (!_hasMinLength || !_hasUppercase || !_hasLowercase || !_hasNumber || !_hasSpecialChar)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please meet all password requirements'), backgroundColor: Color(0xFFD32F2F)));
+      return;
+    }
     setState(() => _isLoading = true);
     try {
       if (_isLogin) await FirebaseAuth.instance.signInWithEmailAndPassword(email: e, password: p);
@@ -610,6 +632,19 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
+  Widget _buildRequirement(String text, bool met) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 48, top: 4),
+      child: Row(
+        children: [
+          Icon(met ? Icons.check_circle : Icons.cancel, size: 14, color: met ? Colors.greenAccent : Colors.white38),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(color: met ? Colors.white70 : Colors.white38, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -653,6 +688,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           TextField(controller: _emailController, style: const TextStyle(color: Colors.white, fontSize: 16), decoration: InputDecoration(labelText: 'Email Address', labelStyle: const TextStyle(color: Colors.white60), prefixIcon: const Icon(Icons.alternate_email, color: Colors.white38), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.redAccent)))),
           const SizedBox(height: 25),
           TextField(controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.white, fontSize: 16), decoration: InputDecoration(labelText: 'Password', labelStyle: const TextStyle(color: Colors.white60), prefixIcon: const Icon(Icons.lock_person_outlined, color: Colors.white38), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.redAccent)))),
+          if (!_isLogin) ...[
+            const SizedBox(height: 12),
+            _buildRequirement('At least 8 characters', _hasMinLength),
+            _buildRequirement('One uppercase letter', _hasUppercase),
+            _buildRequirement('One lowercase letter', _hasLowercase),
+            _buildRequirement('One number', _hasNumber),
+            _buildRequirement('One special character', _hasSpecialChar),
+          ],
           const SizedBox(height: 12),
           if (_isLogin) Align(
             alignment: Alignment.centerRight,
