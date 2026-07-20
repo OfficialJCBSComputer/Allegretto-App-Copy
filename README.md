@@ -72,7 +72,7 @@ This repo includes `codemagic.yaml` for automatic builds on push.
 
 | Variable | Value |
 |----------|-------|
-| `ENCRYPTION_PASSWORD` | The `.env.enc` password (`Allegretto2024`) — mark as **encrypted** |
+| `ENCRYPTION_PASSWORD` | The `.env.enc` password (`Ask Team`) — mark as **encrypted** |
 | `EMAIL` | Your email for build notifications |
 
 4. Push to `main` — Codemagic will build APK + IPA automatically
