@@ -1036,6 +1036,29 @@ class _QRValidationPageState extends State<QRValidationPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF1A1A1A),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.construction, size: 64, color: Color(0xFFD32F2F)),
+              const SizedBox(height: 24),
+              const Text('In Development', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              const Text('QR code scanning is coming soon to the web version.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UserDashboardPage())),
+                child: const Text('My Entries', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
       body: Stack(
