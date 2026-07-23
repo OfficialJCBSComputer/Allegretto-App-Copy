@@ -40,6 +40,21 @@ import 'platform_checks.dart';
 
 import 'web_ad_manager_stub.dart' if (dart.library.js_util) 'web_ad_manager_web.dart';
 
+class AppColors {
+  AppColors._();
+  static const Color darkestBg = Color(0xFF121212);
+  static const Color darkBg = Color(0xFF1A1A1A);
+  static const Color mediumBg = Color(0xFF212121);
+  static const Color cardBg = Color(0xFF1E1E1E);
+  static const Color surfaceDark = Color(0xFF2C2C2C);
+  static const Color redAccent = Color(0xFFD32F2F);
+  static const Color redLighter = Color(0xFFE53935);
+  static const Color redDarker = Color(0xFFB71C1C);
+  static const Color textGrey = Color(0xFF757575);
+  static const Color textGreyLight = Color(0xFF9E9E9E);
+  static const Color textGreyLighter = Color(0xFFBDBDBD);
+}
+
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 const AndroidNotificationChannel devChannel = AndroidNotificationChannel(
@@ -70,6 +85,8 @@ Map<String, String> _adConfig = {
   'web_slot_id': dotenv.env['ADMOB_WEB_SLOT_ID'] ?? '6311371130',
 };
 
+final _dio = Dio();
+
 // In-app Purchase product IDs (configure in Google Play Console / App Store Connect)
 const String _kProductRemoveAds = 'ads_removal_monthly';
 const String _kProductPro = 'pro_offline_monthly';
@@ -98,7 +115,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
 
-  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+  if (AppPlatform.isMobile) {
     try { MobileAds.instance.initialize(); } catch (_) {}
   }
 
@@ -144,7 +161,7 @@ void main() async {
 
 Future<void> _requestPermissions() async {
   try {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (AppPlatform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
       if (info.version.sdkInt >= 33) {
         await Permission.notification.request();
@@ -208,7 +225,7 @@ class _AllegrettoAppState extends State<AllegrettoApp> {
               const SizedBox(width: 12),
               Expanded(child: Text('CLOUD SIGNAL: $title')),
             ]),
-            backgroundColor: const Color(0xFF212121),
+            backgroundColor: AppColors.mediumBg,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 5),
           )
@@ -245,7 +262,7 @@ class _AllegrettoAppState extends State<AllegrettoApp> {
         debugShowCheckedModeBanner: false,
         themeMode: _themeMode,
         theme: ThemeData(useMaterial3: true, brightness: Brightness.light, colorSchemeSeed: Colors.red),
-        darkTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark, colorSchemeSeed: Colors.red, scaffoldBackgroundColor: const Color(0xFF121212)),
+        darkTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark, colorSchemeSeed: Colors.red, scaffoldBackgroundColor: AppColors.darkestBg),
         home: const AppVersionWrapper(child: AuthWrapper()),
       ),
     );
@@ -294,8 +311,8 @@ class _AppVersionWrapperState extends State<AppVersionWrapper> {
 
   bool _isNewer(String target, String current) {
     try {
-      List<int> t = target.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      List<int> c = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      List<int> t = target.split('.').map((e) => int.tryParse(e)).whereType<int>().toList();
+      List<int> c = current.split('.').map((e) => int.tryParse(e)).whereType<int>().toList();
       for (int i = 0; i < t.length; i++) {
         if (i >= c.length) return true;
         if (t[i] > c[i]) return true;
@@ -317,7 +334,7 @@ class _AppVersionWrapperState extends State<AppVersionWrapper> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Colors.black, Color(0xFF1A1A1A), Color(0xFF121212)],
+              colors: [Colors.black, AppColors.darkBg, AppColors.darkestBg],
             ),
           ),
           child: SafeArea(
@@ -332,7 +349,7 @@ class _AppVersionWrapperState extends State<AppVersionWrapper> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(color: Colors.red.withOpacity(0.2), blurRadius: 40, spreadRadius: 5),
-                          BoxShadow(color: const Color(0xFFB71C1C).withOpacity(0.1), blurRadius: 100, spreadRadius: 10),
+                          BoxShadow(color: AppColors.redDarker.withOpacity(0.1), blurRadius: 100, spreadRadius: 10),
                         ],
                       ),
                       child: ClipRRect(
@@ -343,7 +360,7 @@ class _AppVersionWrapperState extends State<AppVersionWrapper> {
                     const SizedBox(height: 50),
                     ShaderMask(
                       shaderCallback: (bounds) => const LinearGradient(
-                        colors: [const Color(0xFFB71C1C), const Color(0xFFE53935), const Color(0xFFB71C1C)],
+                        colors: [AppColors.redDarker, AppColors.redLighter, AppColors.redDarker],
                         stops: [0.0, 0.5, 1.0],
                       ).createShader(bounds),
                       child: const Text(
@@ -457,8 +474,19 @@ class _SessionTrackerState extends State<SessionTracker> with WidgetsBindingObse
     else if (state == AppLifecycleState.resumed) _startSession();
   }
   void _startSession() { _startTime = DateTime.now(); _sessionId = const Uuid().v4(); _logStart(); }
-  void _endSession() { if (_sessionId != null) { DataCollector.endFirestoreSession(_sessionId!, DateTime.now().difference(_startTime).inSeconds); _sessionId = null; } }
-  Future<void> _logStart() async { DataCollector.startFirestoreSession(_sessionId!, await DataCollector.getDeviceInfo()); }
+  Future<void> _logStart() async {
+    final res = await Connectivity().checkConnectivity();
+    if (res.isEmpty || res.contains(ConnectivityResult.none)) return;
+    DataCollector.startFirestoreSession(_sessionId!, await DataCollector.getDeviceInfo());
+  }
+  void _endSession() async {
+    if (_sessionId == null) return;
+    final res = await Connectivity().checkConnectivity();
+    if (!res.isEmpty && !res.contains(ConnectivityResult.none)) {
+      DataCollector.endFirestoreSession(_sessionId!, DateTime.now().difference(_startTime).inSeconds);
+    }
+    _sessionId = null;
+  }
   @override
   Widget build(BuildContext context) => widget.child;
 }
@@ -508,7 +536,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final p = _passwordController.text.trim();
     if (e.isEmpty || p.isEmpty) return;
     if (!_isLogin && (!_hasMinLength || !_hasUppercase || !_hasLowercase || !_hasNumber || !_hasSpecialChar)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please meet all password requirements'), backgroundColor: Color(0xFFD32F2F)));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please meet all password requirements'), backgroundColor: AppColors.redAccent));
       return;
     }
     setState(() => _isLoading = true);
@@ -523,7 +551,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         }
       }
     } catch (err) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.toString()), backgroundColor: const Color(0xFFD32F2F)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.toString()), backgroundColor: AppColors.redAccent));
     } finally { if (mounted) setState(() => _isLoading = false); }
   }
 
@@ -555,7 +583,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         }, SetOptions(merge: true));
       }
     } catch (err) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google Sign-In failed: ${err.toString()}'), backgroundColor: const Color(0xFFD32F2F)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google Sign-In failed: ${err.toString()}'), backgroundColor: AppColors.redAccent));
     } finally { if (mounted) setState(() => _isLoading = false); }
   }
 
@@ -567,7 +595,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF212121),
+        backgroundColor: AppColors.mediumBg,
         title: const Text('Reset Password', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -600,7 +628,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               final email = emailController.text.trim();
               if (email.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter your email address'), backgroundColor: const Color(0xFFD32F2F)),
+                  const SnackBar(content: Text('Please enter your email address'), backgroundColor: AppColors.redAccent),
                 );
                 return;
               }
@@ -619,7 +647,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: const Color(0xFFD32F2F)),
+                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: AppColors.redAccent),
                   );
                 }
               }
@@ -653,7 +681,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.black, Color(0xFF1A1A1A), Color(0xFF121212)],
+            colors: [Colors.black, AppColors.darkBg, AppColors.darkestBg],
           ),
         ),
         child: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(40.0), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -667,7 +695,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(color: Colors.red.withOpacity(0.2 + (_logoAnim.value * 0.15)), blurRadius: 40 + (_logoAnim.value * 30), spreadRadius: 5),
-                      BoxShadow(color: const Color(0xFFB71C1C).withOpacity(0.3), blurRadius: 100, spreadRadius: 10),
+                      BoxShadow(color: AppColors.redDarker.withOpacity(0.3), blurRadius: 100, spreadRadius: 10),
                     ],
                   ),
                   child: ClipRRect(
@@ -680,7 +708,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           ),
           const SizedBox(height: 50),
           ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(colors: [const Color(0xFFB71C1C), const Color(0xFFE53935), const Color(0xFFB71C1C)], stops: [0.0, 0.5, 1.0]).createShader(bounds),
+            shaderCallback: (bounds) => const LinearGradient(colors: [AppColors.redDarker, AppColors.redLighter, AppColors.redDarker], stops: [0.0, 0.5, 1.0]).createShader(bounds),
             child: const Text('ALLEGRETTO', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.white), textAlign: TextAlign.center),
           ),
           const Text('MUSIC • DRAMA • DANCE • ART', style: TextStyle(fontSize: 12, letterSpacing: 3, color: Colors.white54, fontWeight: FontWeight.w400), textAlign: TextAlign.center),
@@ -747,6 +775,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   InterstitialAd? _interstitialAd;
   bool _isOffline = false;
   final List<bool> _pageLoaded = [true, false, false, false, true];
+  StreamSubscription? _userSub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   @override
   void initState() { 
@@ -756,16 +786,23 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     _initConnectivity(); 
   }
 
+  @override
+  void dispose() {
+    _userSub?.cancel();
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initConnectivity() async {
     final res = await Connectivity().checkConnectivity();
     setState(() => _isOffline = res.isEmpty || res.contains(ConnectivityResult.none));
-    Connectivity().onConnectivityChanged.listen((r) => setState(() => _isOffline = r.isEmpty || r.contains(ConnectivityResult.none)));
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((r) => setState(() => _isOffline = r.isEmpty || r.contains(ConnectivityResult.none)));
   }
 
   void _checkSubscriptions() {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return;
-    FirebaseFirestore.instance.collection('users').doc(u.uid).snapshots().listen((doc) {
+    _userSub = FirebaseFirestore.instance.collection('users').doc(u.uid).snapshots().listen((doc) {
       if (mounted && doc.exists) {
         final isDev = doc.data()?['is_developer'] == 'true' || doc.data()?['is_developer'] == true;
         setState(() {
@@ -803,7 +840,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       final fileName = url.split('/').last;
       final dir = _isPro ? await getApplicationDocumentsDirectory() : await getTemporaryDirectory();
       final path = '${dir.path}/$fileName';
-      if (!File(path).existsSync()) await Dio().download(url, path);
+      if (!File(path).existsSync()) await _dio.download(url, path);
       if (!mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (c) => PDFViewerScreen(path: path, url: url, isPro: _isPro)));
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error opening PDF'))); }
@@ -836,7 +873,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             return IconButton(
               icon: Badge(
                 isLabelVisible: hasNew,
-                backgroundColor: const Color(0xFFD32F2F),
+                backgroundColor: AppColors.redAccent,
                 label: hasNew ? Text(snapshot.data!.docs.length.toString()) : null,
                 child: const Icon(Icons.settings),
               ),
@@ -893,10 +930,10 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
   Future<void> _startDownload() async {
     try {
       Directory? dir;
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) dir = Directory('/storage/emulated/0/Download');
+      if (AppPlatform.isAndroid) dir = Directory('/storage/emulated/0/Download');
       else dir = await getApplicationDocumentsDirectory();
       final savePath = '${dir!.path}/${widget.url.split('/').last}';
-      await Dio().download(widget.url, savePath);
+      await _dio.download(widget.url, savePath);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to: $savePath'), action: SnackBarAction(label: 'Open', onPressed: () => OpenFilex.open(savePath))));
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Download failed.'))); }
   }
@@ -930,7 +967,7 @@ class _OfflineLibraryPageState extends State<OfflineLibraryPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Offline Library')),
-    body: ListView.builder(itemCount: _files.length, itemBuilder: (c, i) => ListTile(leading: Icon(Icons.picture_as_pdf, color: const Color(0xFFD32F2F)), title: Text(_files[i].path.split('/').last), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => PDFViewerScreen(path: _files[i].path, url: '', isPro: true))), trailing: IconButton(icon: const Icon(Icons.delete), onPressed: () { _files[i].deleteSync(); _load(); }))),
+    body: ListView.builder(itemCount: _files.length, itemBuilder: (c, i) => ListTile(leading: Icon(Icons.picture_as_pdf, color: AppColors.redAccent), title: Text(_files[i].path.split('/').last), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => PDFViewerScreen(path: _files[i].path, url: '', isPro: true))), trailing: IconButton(icon: const Icon(Icons.delete), onPressed: () { _files[i].deleteSync(); _load(); }))),
   );
 }
 
@@ -969,13 +1006,20 @@ class RegionDetailView extends StatefulWidget {
 class _RegionDetailViewState extends State<RegionDetailView> {
   bool _isSubscribed = false;
   final u = FirebaseAuth.instance.currentUser;
+  StreamSubscription? _sub;
 
   @override
   void initState() { super.initState(); _checkSubscription(); }
 
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
   void _checkSubscription() {
     if (u == null) return;
-    FirebaseFirestore.instance.collection('users').doc(u!.uid).snapshots().listen((doc) {
+    _sub = FirebaseFirestore.instance.collection('users').doc(u!.uid).snapshots().listen((doc) {
       if (mounted && doc.exists) {
         List subs = doc.data()?['subscribed_regions'] ?? [];
         setState(() => _isSubscribed = subs.contains(widget.regionName));
@@ -1038,19 +1082,19 @@ class _QRValidationPageState extends State<QRValidationPage> {
   Widget build(BuildContext context) {
     if (kIsWeb) {
       return Scaffold(
-        backgroundColor: const Color(0xFF1A1A1A),
+        backgroundColor: AppColors.darkBg,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.construction, size: 64, color: Color(0xFFD32F2F)),
+              const Icon(Icons.construction, size: 64, color: AppColors.redAccent),
               const SizedBox(height: 24),
               const Text('In Development', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               const Text('QR code scanning is coming soon to the web version.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14)),
               const SizedBox(height: 32),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UserDashboardPage())),
                 child: const Text('My Entries', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
               ),
@@ -1060,7 +1104,7 @@ class _QRValidationPageState extends State<QRValidationPage> {
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: AppColors.darkBg,
       body: Stack(
         children: [
           MobileScanner(
@@ -1073,7 +1117,7 @@ class _QRValidationPageState extends State<QRValidationPage> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD32F2F), width: 2),
+                border: Border.all(color: AppColors.redAccent, width: 2),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -1086,7 +1130,7 @@ class _QRValidationPageState extends State<QRValidationPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UserDashboardPage())),
                   child: const Text('My Entries', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                 ),
@@ -1160,7 +1204,7 @@ class _EntryFormPageState extends State<EntryFormPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     if (_adultNameCtrl.text.trim().isEmpty || _studentNameCtrl.text.trim().isEmpty || _studentSurnameCtrl.text.trim().isEmpty || _studentSchoolCtrl.text.trim().isEmpty || _studentGradeCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('All fields are required'), backgroundColor: const Color(0xFFD32F2F)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('All fields are required'), backgroundColor: AppColors.redAccent));
       return;
     }
     setState(() => _saving = true);
@@ -1193,7 +1237,7 @@ class _EntryFormPageState extends State<EntryFormPage> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const UserDashboardPage()));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: const Color(0xFFD32F2F)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.redAccent));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1202,10 +1246,10 @@ class _EntryFormPageState extends State<EntryFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: AppColors.darkBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        leading: IconButton(icon: Icon(Icons.arrow_back, color: const Color(0xFF757575)), onPressed: () => Navigator.pop(context)),
+        backgroundColor: AppColors.darkBg,
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: AppColors.textGrey), onPressed: () => Navigator.pop(context)),
         title: const Text('New Entry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
@@ -1216,8 +1260,8 @@ class _EntryFormPageState extends State<EntryFormPage> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF2C2C2C), borderRadius: BorderRadius.circular(8)),
-              child: Text('QR: ${widget.qrData}', style: const TextStyle(color: const Color(0xFF9E9E9E), fontSize: 13, fontFamily: 'monospace')),
+              decoration: BoxDecoration(color: AppColors.surfaceDark, borderRadius: BorderRadius.circular(8)),
+              child: Text('QR: ${widget.qrData}', style: const TextStyle(color: AppColors.textGreyLight, fontSize: 13, fontFamily: 'monospace')),
             ),
             const SizedBox(height: 24),
             _buildLabel('Adult Name (Mom, Dad, Looker)'),
@@ -1251,7 +1295,7 @@ class _EntryFormPageState extends State<EntryFormPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), padding:  const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, padding:  const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 onPressed: _saving ? null : _submit,
                 child: _saving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Submit Entry', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
               ),
@@ -1263,7 +1307,7 @@ class _EntryFormPageState extends State<EntryFormPage> {
   }
 
   Widget _buildLabel(String text) {
-    return Text(text, style: const TextStyle(color: const Color(0xFF9E9E9E), fontSize: 14));
+    return Text(text, style: const TextStyle(color: AppColors.textGreyLight, fontSize: 14));
   }
 
   Widget _buildTextField(TextEditingController ctrl, String hint) {
@@ -1272,9 +1316,9 @@ class _EntryFormPageState extends State<EntryFormPage> {
       style: const TextStyle(color: Colors.white, fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: const Color(0xFF757575)),
+        hintStyle: const TextStyle(color: AppColors.textGrey),
         filled: true,
-        fillColor: const Color(0xFF2C2C2C),
+        fillColor: AppColors.surfaceDark,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
@@ -1288,7 +1332,7 @@ class _EntryFormPageState extends State<EntryFormPage> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             onPressed: onTap,
             child: Text(path != null ? 'Change Image' : label, style: const TextStyle(color: Colors.white, fontSize: 16)),
           ),
@@ -1351,7 +1395,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
       });
       _fetchEntries();
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload'), backgroundColor: const Color(0xFFD32F2F)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload'), backgroundColor: AppColors.redAccent));
       setState(() => _loading = false);
     }
   }
@@ -1372,7 +1416,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
       });
       _fetchEntries();
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload'), backgroundColor: const Color(0xFFD32F2F)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload'), backgroundColor: AppColors.redAccent));
       setState(() => _loading = false);
     }
   }
@@ -1380,10 +1424,10 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: AppColors.darkBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        leading: IconButton(icon: Icon(Icons.arrow_back, color: const Color(0xFF757575)), onPressed: () => Navigator.pop(context)),
+        backgroundColor: AppColors.darkBg,
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: AppColors.textGrey), onPressed: () => Navigator.pop(context)),
         title: const Text('My Entries', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Column(
@@ -1391,9 +1435,9 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text('${_entries.length} entr${_entries.length == 1 ? 'y' : 'ies'}', style: const TextStyle(color: const Color(0xFF757575), fontSize: 14)),
+            child: Text('${_entries.length} entr${_entries.length == 1 ? 'y' : 'ies'}', style: const TextStyle(color: AppColors.textGrey, fontSize: 14)),
           ),
-          if (_loading) const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: const Color(0xFFE53935)))),
+          if (_loading) const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: AppColors.redLighter))),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(20),
@@ -1422,34 +1466,34 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFF2C2C2C), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: AppColors.surfaceDark, borderRadius: BorderRadius.circular(12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('QR: $qrData', style: const TextStyle(color: const Color(0xFF9E9E9E), fontSize: 13, fontFamily: 'monospace')),
+          Text('QR: $qrData', style: const TextStyle(color: AppColors.textGreyLight, fontSize: 13, fontFamily: 'monospace')),
           const SizedBox(height: 4),
-          Text(createdAt.isNotEmpty ? createdAt.replaceFirst('T', ' ').substring(0, 19) : '', style: const TextStyle(color: const Color(0xFF757575), fontSize: 12)),
+          Text(createdAt.isNotEmpty ? createdAt.replaceFirst('T', ' ').substring(0, 19) : '', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
           const SizedBox(height: 4),
           Text('Adult: $adultName', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
           Text('Student: $studentName $studentSurname', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-          Text('School: $studentSchool | Grade: $studentGrade', style: const TextStyle(color: const Color(0xFF9E9E9E), fontSize: 13)),
+          Text('School: $studentSchool | Grade: $studentGrade', style: const TextStyle(color: AppColors.textGreyLight, fontSize: 13)),
           const SizedBox(height: 8),
           Row(
             children: [
               Text(marksProofUrl.isNotEmpty ? 'Marks Proof: Uploaded' : 'Marks Proof: Not uploaded',
-                style: TextStyle(color: marksProofUrl.isNotEmpty ? const Color(0xFF9E9E9E) : const Color(0xFF757575), fontSize: 13)),
+                style: TextStyle(color: marksProofUrl.isNotEmpty ? AppColors.textGreyLight : AppColors.textGrey, fontSize: 13)),
               const Spacer(),
               if (marksUploadAttempts < 4 && marksProofUrl.isEmpty)
                 GestureDetector(
                   onTap: () => _addMarksProof(id, marksUploadAttempts),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: const Color(0xFFD32F2F), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: AppColors.redAccent, borderRadius: BorderRadius.circular(6)),
                     child: Text('Add Marks (${4 - marksUploadAttempts} tries left)', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ),
               if (marksUploadAttempts >= 4 && marksProofUrl.isEmpty)
-                const Text('Portal Locked', style: TextStyle(color: const Color(0xFFD32F2F), fontSize: 13, fontWeight: FontWeight.w700)),
+                const Text('Portal Locked', style: TextStyle(color: AppColors.redAccent, fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1458,11 +1502,11 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: paymentStatus == 'paid' ? const Color(0xFF2C2C2C) : const Color(0xFF424242),
+                  color: paymentStatus == 'paid' ? AppColors.surfaceDark : const Color(0xFF424242),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(paymentStatus == 'paid' ? 'Paid' : 'Payment Pending',
-                  style: TextStyle(color: paymentStatus == 'paid' ? const Color(0xFF9E9E9E) : const Color(0xFF757575), fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: paymentStatus == 'paid' ? AppColors.textGreyLight : AppColors.textGrey, fontSize: 14, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               if (paymentStatus != 'paid')
@@ -1470,7 +1514,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
                   onTap: () => _addPaymentProof(id),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: const Color(0xFFD32F2F), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: AppColors.redAccent, borderRadius: BorderRadius.circular(6)),
                     child: const Text('Add Payment', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -1496,6 +1540,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   String _ver = "";
   final u = FirebaseAuth.instance.currentUser;
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+  StreamSubscription? _userDocSub;
   List<ProductDetails> _products = [];
   bool _isLoadingProducts = false;
 
@@ -1503,11 +1548,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   void initState() { super.initState(); _load(); _initIap(); }
 
   @override
-  void dispose() { _purchaseSubscription?.cancel(); super.dispose(); }
+  void dispose() { _purchaseSubscription?.cancel(); _userDocSub?.cancel(); super.dispose(); }
   void _load() async {
     final info = await PackageInfo.fromPlatform(); setState(() => _ver = "${info.version}+${info.buildNumber}");
     if (u != null) {
-      FirebaseFirestore.instance.collection('users').doc(u!.uid).snapshots().listen((d) {
+      _userDocSub = FirebaseFirestore.instance.collection('users').doc(u!.uid).snapshots().listen((d) {
         if (mounted && d.exists) setState(() {
           _isDeveloper = d.data()?['is_developer'] == 'true' || d.data()?['is_developer'] == true;
           _isSubscribed = (d.data()?['is_subscribed'] ?? false);
@@ -1527,13 +1572,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final productId = plan == 'Pro' ? _kProductPro : _kProductRemoveAds;
     final idx = _products.indexWhere((p) => p.id == productId);
     if (idx == -1) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product not available in store'), backgroundColor: const Color(0xFFD32F2F)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product not available in store'), backgroundColor: AppColors.redAccent));
       return;
     }
     try {
       InAppPurchase.instance.buyNonConsumable(purchaseParam: PurchaseParam(productDetails: _products[idx]));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase failed: $e'), backgroundColor: const Color(0xFFD32F2F)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase failed: $e'), backgroundColor: AppColors.redAccent));
     }
   }
 
@@ -1552,7 +1597,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     setState(() => _isLoadingProducts = true);
     final response = await InAppPurchase.instance.queryProductDetails({_kProductRemoveAds, _kProductPro});
     if (mounted) setState(() { _products = response.productDetails; _isLoadingProducts = false; });
-    _purchaseSubscription = InAppPurchase.instance.purchaseStream.listen(_handlePurchaseUpdate, onError: (_) {});
+    _purchaseSubscription = InAppPurchase.instance.purchaseStream.listen(_handlePurchaseUpdate, onError: (e) => debugPrint('Purchase stream error: $e'));
     await InAppPurchase.instance.restorePurchases();
   }
 
@@ -1582,13 +1627,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               'platform': platform,
             });
           } catch (e) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Verification failed: $e'), backgroundColor: const Color(0xFFD32F2F)));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Verification failed: $e'), backgroundColor: AppColors.redAccent));
             continue;
           }
         }
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Purchase successful!'), backgroundColor: Colors.green));
       } else if (purchase.status == PurchaseStatus.error) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase failed: ${purchase.error?.message ?? "Unknown"}'), backgroundColor: const Color(0xFFD32F2F)));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase failed: ${purchase.error?.message ?? "Unknown"}'), backgroundColor: AppColors.redAccent));
       }
     }
   }
@@ -1596,7 +1641,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   Future<void> _restorePurchases() async {
     if (kIsWeb) return;
     final available = await InAppPurchase.instance.isAvailable();
-    if (!available) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('In-app purchases not available'), backgroundColor: const Color(0xFFD32F2F))); return; }
+    if (!available) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('In-app purchases not available'), backgroundColor: AppColors.redAccent)); return; }
     setState(() => _isLoadingProducts = true);
     await InAppPurchase.instance.restorePurchases();
     if (mounted) setState(() => _isLoadingProducts = false);
@@ -1605,9 +1650,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final tc = ThemeController.of(context);
-    final headerStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFFBDBDBD));
+    final headerStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textGreyLighter);
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.darkestBg,
       appBar: AppBar(title: const Text('Account Settings'), backgroundColor: Colors.transparent, elevation: 0),
       body: ListView(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), children: [
         Text('Profile Info', style: headerStyle),
@@ -1627,12 +1672,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 await FirebaseMessaging.instance.subscribeToTopic('developers');
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Subscribed to developer notifications'), backgroundColor: Colors.green));
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to subscribe: $e'), backgroundColor: const Color(0xFFD32F2F)));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to subscribe: $e'), backgroundColor: AppColors.redAccent));
               }
             },
             icon: const Icon(Icons.notifications_active),
             label: const Text('Force Subscribe to Notifications'),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)))
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)))
           ),
           const SizedBox(height: 12),
           StreamBuilder<QuerySnapshot>(
@@ -1651,7 +1696,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       child: const Icon(Icons.file_present),
                     ),
                     label: const Text('Developer Upload Center'),
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)))
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)))
                   ),
                 ],
               );
@@ -1680,11 +1725,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         const SizedBox(height: 12),
         _buildLinkItem(Icons.policy, 'Privacy Policy', () => launchUrl(Uri.parse('https://allegretto-eisteddfod.co.za/privacy-policy/'), mode: LaunchMode.externalApplication)),
         const SizedBox(height: 48),
-        ElevatedButton(onPressed: () => _confirmDelete(), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBDBDBD), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28))), child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.bold))),
+        ElevatedButton(onPressed: () => _confirmDelete(), style: ElevatedButton.styleFrom(backgroundColor: AppColors.textGreyLighter, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28))), child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.bold))),
         const SizedBox(height: 24),
         Center(child: Text('Version $_ver', style: const TextStyle(color: Colors.grey, fontSize: 12))),
         const SizedBox(height: 8),
-        TextButton(onPressed: () => FirebaseAuth.instance.signOut().then((_) => Navigator.pop(context)), child: const Text('Logout', style: TextStyle(color: const Color(0xFFD32F2F)))),
+        TextButton(onPressed: () => FirebaseAuth.instance.signOut().then((_) => Navigator.pop(context)), child: const Text('Logout', style: TextStyle(color: AppColors.redAccent))),
       ]),
     );
   }
@@ -1723,13 +1768,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         children: [
                            const Text('DIAGNOSTIC DASHBOARD', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                            const SizedBox(height: 6),
-                           if (DateTime.now().year < 2024) 
-                             const Padding(
-                               padding: EdgeInsets.only(bottom: 8),
-                               child: Text('⚠️ CRITICAL: PHONE DATE IS WRONG', style: TextStyle(color: const Color(0xFFD32F2F), fontWeight: FontWeight.bold, fontSize: 10)),
-                             ),
-                           if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-                             FutureBuilder<GooglePlayServicesAvailability>(
+
+                            if (AppPlatform.isAndroid)
+                              FutureBuilder<GooglePlayServicesAvailability>(
                                future: GoogleApiAvailability.instance.checkGooglePlayServicesAvailability(),
                                builder: (context, gms) {
                                  final gmsStatus = gms.data?.toString().split('.').last ?? 'Checking...';
@@ -1784,7 +1825,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       label: const Text('Repair & Send Manual Test'),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo.shade900, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48)),
                     ),
-                    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                    if (AppPlatform.isAndroid)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: TextButton.icon(
@@ -1804,7 +1845,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> _requestPushPermissions() async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (AppPlatform.isAndroid) {
       await FirebaseMessaging.instance.setAutoInitEnabled(true);
     }
     
@@ -1826,11 +1867,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     if (mounted) setState(() {});
   }
 
-  Widget _buildInfoContainer(String label, String value) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 16, color: Colors.white))]));
-  Widget _subscriptionItem(String title, String price, bool active, VoidCallback onUpgrade, VoidCallback onCancel) => Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)), const SizedBox(height: 4), Text(price, style: const TextStyle(color: Colors.grey, fontSize: 13))])), if (active) TextButton(onPressed: onCancel, child: const Text('Unsubscribe', style: TextStyle(color: const Color(0xFFD32F2F), fontSize: 12))) else ElevatedButton(onPressed: onUpgrade, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD32F2F), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Upgrade'))]));
-  Widget _preferenceSwitch(String title, bool value, Function(bool) onChanged) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(title, style: const TextStyle(fontSize: 16, color: Colors.white)), Switch(value: value, onChanged: onChanged, activeColor: const Color(0xFFD32F2F))]));
-  Widget _buildLinkItem(IconData icon, String title, VoidCallback onTap) => Container(margin: const EdgeInsets.symmetric(vertical: 4), child: ListTile(leading: Icon(icon, color: const Color(0xFFBDBDBD)), title: Text(title, style: const TextStyle(fontSize: 16, color: Colors.white)), trailing: const Icon(Icons.open_in_new, color: Colors.white38, size: 18), onTap: onTap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), tileColor: const Color(0xFF1E1E1E), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2)));
-  void _confirmDelete() { showDialog(context: context, builder: (c) => AlertDialog(title: const Text('Delete Account'), content: const Text('Are you sure? This is permanent.'), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')), TextButton(onPressed: () async { if (u != null) { try { await FirebaseFirestore.instance.collection('users').doc(u!.uid).delete(); await u!.delete(); } catch(e) {} } Navigator.pop(c); Navigator.pop(context); }, child: const Text('Delete', style: TextStyle(color: const Color(0xFFD32F2F))))])); }
+  Widget _buildInfoContainer(String label, String value) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 16, color: Colors.white))]));
+  Widget _subscriptionItem(String title, String price, bool active, VoidCallback onUpgrade, VoidCallback onCancel) => Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20), decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)), const SizedBox(height: 4), Text(price, style: const TextStyle(color: Colors.grey, fontSize: 13))])), if (active) TextButton(onPressed: onCancel, child: const Text('Unsubscribe', style: TextStyle(color: AppColors.redAccent, fontSize: 12))) else ElevatedButton(onPressed: onUpgrade, style: ElevatedButton.styleFrom(backgroundColor: AppColors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Upgrade'))]));
+  Widget _preferenceSwitch(String title, bool value, Function(bool) onChanged) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(title, style: const TextStyle(fontSize: 16, color: Colors.white)), Switch(value: value, onChanged: onChanged, activeColor: AppColors.redAccent)]));
+  Widget _buildLinkItem(IconData icon, String title, VoidCallback onTap) => Container(margin: const EdgeInsets.symmetric(vertical: 4), child: ListTile(leading: Icon(icon, color: AppColors.textGreyLighter), title: Text(title, style: const TextStyle(fontSize: 16, color: Colors.white)), trailing: const Icon(Icons.open_in_new, color: Colors.white38, size: 18), onTap: onTap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), tileColor: AppColors.cardBg, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2)));
+  void _confirmDelete() { showDialog(context: context, builder: (c) => AlertDialog(title: const Text('Delete Account'), content: const Text('Are you sure? This is permanent.'), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')), TextButton(onPressed: () async { if (u != null) { try { await FirebaseFirestore.instance.collection('users').doc(u!.uid).delete(); await u!.delete(); } catch(e) {} } Navigator.pop(c); Navigator.pop(context); }, child: const Text('Delete', style: TextStyle(color: AppColors.redAccent)))])); }
 }
 
 class DeveloperUploadPage extends StatefulWidget {
@@ -1857,7 +1898,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.darkestBg,
       appBar: AppBar(
         title: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1885,7 +1926,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('dev_files').where('parentPath', isEqualTo: widget.currentPath).limit(500).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.error_outline, color: const Color(0xFFD32F2F), size: 48), const SizedBox(height: 16), Text('Vault Security Interlock\nEnsure rules are updated.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70))])));
+          if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.error_outline, color: AppColors.redAccent, size: 48), const SizedBox(height: 16), Text('Vault Security Interlock\nEnsure rules are updated.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70))])));
           
           if (snapshot.connectionState == ConnectionState.waiting) {
             return ListView.builder(
@@ -1910,7 +1951,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
                 leading: Icon(isFolder ? Icons.folder : Icons.insert_drive_file, color: i % 2 == 0 ? Colors.amber : Colors.blueGrey, size: 28),
                 title: Text(data['name'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
                 subtitle: isFolder ? null : Text('Uploader: ${data['uploader']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                trailing: IconButton(icon: const Icon(Icons.delete_outline, color: const Color(0xFFD32F2F), size: 22), onPressed: () => _deleteItem(items[i])),
+                trailing: IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.redAccent, size: 22), onPressed: () => _deleteItem(items[i])),
                 onTap: isFolder ? () => Navigator.push(context, MaterialPageRoute(builder: (c) => DeveloperUploadPage(currentPath: data['fullPath'], pathSegments: [...widget.pathSegments, data['name']]))) : () => launchUrl(Uri.parse(data['url']), mode: LaunchMode.externalApplication),
               );
             }
@@ -1946,7 +1987,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
       }
       await batch.commit();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Multi-Sync Complete!'), backgroundColor: Colors.green));
-    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sync failed: $e'), backgroundColor: const Color(0xFF757575))); }
+    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sync failed: $e'), backgroundColor: AppColors.textGrey)); }
     finally { if (mounted) setState(() => _isSyncing = false); }
   }
 
@@ -1989,7 +2030,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
 
   void _showFailDialog(String error) {
     showDialog(context: context, builder: (c) => AlertDialog(
-      title: const Text('Upload Failed', style: TextStyle(color: const Color(0xFFD32F2F))),
+      title: const Text('Upload Failed', style: TextStyle(color: AppColors.redAccent)),
       content: Text('An error occurred during transmission:\n\n$error'),
       actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Dismiss'))],
     ));
@@ -2007,7 +2048,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
         await FirebaseFirestore.instance.collection('dev_files').doc(fullPath.replaceAll('/', '_')).set({
           'name': n, 'fullPath': fullPath, 'parentPath': widget.currentPath, 'isFolder': true, 'createdAt': FieldValue.serverTimestamp()
         }, SetOptions(merge: true));
-      } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Vault Creation Failed: $e'), backgroundColor: const Color(0xFF757575))); }
+      } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Vault Creation Failed: $e'), backgroundColor: AppColors.textGrey)); }
     }
   }
 
@@ -2018,7 +2059,7 @@ class _DeveloperUploadPageState extends State<DeveloperUploadPage> with SingleTi
       try {
         if (data['isFolder'] != true) await FirebaseStorage.instance.ref(data['fullPath']).delete();
         await doc.reference.delete();
-      } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erasure Failed: $e'), backgroundColor: const Color(0xFF757575))); }
+      } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erasure Failed: $e'), backgroundColor: AppColors.textGrey)); }
     }
   }
 }
@@ -2036,10 +2077,11 @@ class _UploadProgressDialog extends StatefulWidget {
 class _UploadProgressDialogState extends State<_UploadProgressDialog> {
   double _progress = 0;
   String _status = 'Initializing...';
+  StreamSubscription? _sub;
   @override
   void initState() {
     super.initState();
-    widget.task.snapshotEvents.listen((event) {
+    _sub = widget.task.snapshotEvents.listen((event) {
       if (mounted) setState(() {
         _progress = event.bytesTransferred / event.totalBytes;
         _status = 'Broadcasting Data: ${event.bytesTransferred ~/ 1024} KB / ${event.totalBytes ~/ 1024} KB';
@@ -2053,9 +2095,15 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
   }
 
   @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: AppColors.cardBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Row(children: [Icon(Icons.cloud_upload_outlined, color: Colors.redAccent), SizedBox(width: 12), Text('Vault Transmission', style: TextStyle(color: Colors.white))]),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -2094,7 +2142,6 @@ class _AllegrettoWebViewState extends State<AllegrettoWebView> {
         ..setBackgroundColor(Colors.white)
         ..loadRequest(Uri.parse(widget.url))
         ..setNavigationDelegate(NavigationDelegate(
-          onPageFinished: (_) {},
           onWebResourceError: (e) => debugPrint('WebView error: $e'),
           onNavigationRequest: (req) {
             if (req.url.toLowerCase().endsWith('.pdf')) { widget.onOpenPDF(req.url); return NavigationDecision.prevent; }
@@ -2122,8 +2169,8 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   void dispose() { _bannerAd?.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) return Container(height: 50, child: const HtmlElementView(viewType: 'ad-view-type'));
-    return (_isLoaded && _bannerAd != null) ? Container(height: 50, child: AdWidget(ad: _bannerAd!)) : const SizedBox.shrink();
+    if (kIsWeb) return const SizedBox(height: 50, child: HtmlElementView(viewType: 'ad-view-type'));
+    return (_isLoaded && _bannerAd != null) ? SizedBox(height: 50, child: AdWidget(ad: _bannerAd!)) : const SizedBox.shrink();
   }
 }
 
